@@ -1,0 +1,8 @@
+to implement:
+- modulo operator: find % remainder
+- conditional operator: condition ? then : else;
+- do while: do { statement } while (condition);
+- foreach: for (var item in iterable) { statement }
+- break:
+- continue:
+- switch case:

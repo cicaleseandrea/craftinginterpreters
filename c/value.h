@@ -1,6 +1,10 @@
 //> Chunks of Bytecode value-h
 #ifndef clox_value_h
 #define clox_value_h
+//> Optimization include-string
+
+#include <string.h>
+//< Optimization include-string
 
 #include "common.h"
 
@@ -31,7 +35,7 @@ typedef uint64_t Value;
 //> is-number
 
 //> is-bool
-#define IS_BOOL(v)      (((v) & FALSE_VAL) == FALSE_VAL)
+#define IS_BOOL(v)      (((v) | 1) == TRUE_VAL)
 //< is-bool
 //> is-nil
 #define IS_NIL(v)       ((v) == NIL_VAL)
@@ -69,27 +73,20 @@ typedef uint64_t Value;
 #define OBJ_VAL(obj) \
     (Value)(SIGN_BIT | QNAN | (uint64_t)(uintptr_t)(obj))
 //< obj-val
-//> double-union
-
-typedef union {
-  uint64_t bits;
-  double num;
-} DoubleUnion;
-//< double-union
 //> value-to-num
 
 static inline double valueToNum(Value value) {
-  DoubleUnion data;
-  data.bits = value;
-  return data.num;
+  double num;
+  memcpy(&num, &value, sizeof(Value));
+  return num;
 }
 //< value-to-num
 //> num-to-value
 
 static inline Value numToValue(double num) {
-  DoubleUnion data;
-  data.num = num;
-  return data.bits;
+  Value value;
+  memcpy(&value, &num, sizeof(double));
+  return value;
 }
 //< num-to-value
 

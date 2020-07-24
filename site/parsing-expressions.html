@@ -139,10 +139,9 @@ You&rsquo;re familiar with syntax trees, and we have some Java classes to repres
 them. The only remaining piece is parsing<span class="em">&mdash;</span>transmogrifying a sequence of
 tokens into one of those syntax trees.</p>
 <p>Some CS textbooks make a big deal out of parsers. In the 60s, computer
-scientists<span class="em">&mdash;</span>reasonably fed up with programming in assembly language<span class="em">&mdash;</span>started
-designing more sophisticated, <span name="human">human</span>-friendly languages
-like FORTRAN and ALGOL. Alas, they weren&rsquo;t very <em>machine</em>-friendly, for the
-primitive machines at the time.</p>
+scientists<span class="em">&mdash;</span>understandably tired of programming in assembly language<span class="em">&mdash;</span>started designing more sophisticated, <span name="human">human</span>-friendly
+languages like FORTRAN and ALGOL. Alas, they weren&rsquo;t very <em>machine</em>-friendly,
+for the primitive machines at the time.</p>
 <aside name="human">
 <p>Consider how harrowing assembly programming on those old machines must have been
 for <em>FORTRAN</em> to be an improvement.</p>
@@ -168,8 +167,11 @@ to figure out which rules could have generated that string.</p>
 that is <em>ambiguous</em>, where different choices of productions can lead to the same
 string. When you&rsquo;re using the grammar to <em>generate</em> strings, that doesn&rsquo;t matter
 much. Once you have the string, who cares how you got to it?</p>
-<p>When parsing, ambiguity means the parser may misunderstand the user&rsquo;s code.
-Here&rsquo;s the Lox expression grammar we put together in the last chapter:</p>
+<p>When parsing, ambiguity means the parser may misunderstand the user&rsquo;s code. As
+we parse, we aren&rsquo;t just determining if the string is valid Lox code, we&rsquo;re
+also tracking which rules match which parts of it so that we know what part of
+the language each token belongs to. Here&rsquo;s the Lox expression grammar we put
+together in the last chapter:</p>
 <div class="codehilite"><pre>
 <span class="i">expression</span> → <span class="i">literal</span>
            | <span class="i">unary</span>
@@ -245,8 +247,8 @@ operator isn&rsquo;t associative, so <code>a .. b</code> is OK, but <code>a .. b
 </aside>
 <p>Without well-defined precedence and associativity, an expression that uses
 multiple operators is ambiguous<span class="em">&mdash;</span>it can be parsed into different syntax trees,
-which could in turn evaluate to different results. For Lox, we follow the same
-precedence rules as C, going from highest to lowest:</p><table>
+which could in turn evaluate to different results. We&rsquo;ll fix that in Lox by
+applying the same precedence rules as C, going from lowest to highest:</p><table>
 <thead>
 <tr>
   <td>Name</td>
@@ -256,18 +258,8 @@ precedence rules as C, going from highest to lowest:</p><table>
 </thead>
 <tbody>
 <tr>
-  <td>Unary</td>
-  <td><code>!</code> <code>-</code></td>
-  <td>Right</td>
-</tr>
-<tr>
-  <td>Multiplication</td>
-  <td><code>/</code> <code>*</code></td>
-  <td>Left</td>
-</tr>
-<tr>
-  <td>Addition</td>
-  <td><code>-</code> <code>+</code></td>
+  <td>Equality</td>
+  <td><code>==</code> <code>!=</code></td>
   <td>Left</td>
 </tr>
 <tr>
@@ -277,48 +269,94 @@ precedence rules as C, going from highest to lowest:</p><table>
   <td>Left</td>
 </tr>
 <tr>
-  <td>Equality</td>
-  <td><code>==</code> <code>!=</code></td>
+  <td>Addition</td>
+  <td><code>-</code> <code>+</code></td>
   <td>Left</td>
+</tr>
+<tr>
+  <td>Multiplication</td>
+  <td><code>/</code> <code>*</code></td>
+  <td>Left</td>
+</tr>
+<tr>
+  <td>Unary</td>
+  <td><code>!</code> <code>-</code></td>
+  <td>Right</td>
 </tr>
 </tbody>
 </table>
-<p>How do we <span name="massage">stuff these restrictions</span> into our
-context-free grammar? Right now, when we have an expression that contains
-subexpressions, like a binary operator, we allow <em>any</em> expression in there:</p>
+<p>Right now, the grammar stuffs all expression types into a single <code>expression</code>
+rule. That same rule is used as the non-terminal for subexpressions, which lets
+the grammar accept any kind of expression as an operand, regardless of whether
+the precedence rules allow it.</p>
+<p>We fix that by <span name="massage">stratifying</span> the grammar. We define a
+separate rule for each precedence level:</p>
+<div class="codehilite"><pre>
+<span class="i">expression</span>     → ...
+<span class="i">equality</span>       → ...
+<span class="i">comparison</span>     → ...
+<span class="i">addition</span>       → ...
+<span class="i">multiplication</span> → ...
+<span class="i">unary</span>          → ...
+<span class="i">primary</span>        → ...
+</pre></div>
 <aside name="massage">
 <p>Instead of baking precedence right into the grammar rules, some parser
 generators let you keep the same ambiguous-but-simple grammar and then add in a
 little explicit operator precedence metadata on the side in order to
 disambiguate.</p>
 </aside>
-<div class="codehilite"><pre>
-<span class="i">binary</span> → <span class="i">expression</span> <span class="i">operator</span> <span class="i">expression</span> ;
-</pre></div>
-<p>The <code>expression</code> nonterminal allows us to pick any kind of expression as an
-operand, regardless of the operator we picked. The rules of precedence limit
-that. For example, an operand of a <code>*</code> expression cannot be a <code>+</code> <span
-name="paren">expression</span>, since the latter has lower precedence.</p>
-<aside name="paren">
-<p>Of course, it could be a <em>parenthesized</em> addition expression, but that&rsquo;s because
-the parentheses themselves are treated as having the highest precedence.</p>
+<p>Each rule here only matches expressions at its precedence level or higher. For
+example, <code>unary</code> matches a unary expression like <code>!negated</code> or a primary
+expression like <code>1234</code>. And <code>addition</code> can match <code>1 + 2</code> but also <code>3 * 4 / 5</code>.
+The final <code>primary</code> rule covers the highest-precedence expressions<span class="em">&mdash;</span>literals
+and parenthesized grouping expressions.</p>
+<p>We just need to fill in the productions for each of those rules. We&rsquo;ll do the
+easy ones first. The top <code>expression</code> rule matches any expression at any
+precedence level. Since <span name="equality"><code>equality</code></span> has the lowest
+precedence, if we match that, then it covers everything:</p>
+<aside name="equality">
+<p>We could eliminate <code>expression</code> and simply use <code>equality</code> in the other rules
+that contain expressions, but using <code>expression</code> makes those other rules read a
+little better.</p>
+<p>Also, in later chapters, when we expand the grammar to include assignment and
+logical operators, we&rsquo;ll only need to change <code>expression</code> instead of touching
+every rule that contains an expression.</p>
 </aside>
-<p>For the multiplication operands, we need a nonterminal that means &ldquo;any kind of
-expression of higher precedence than <code>*</code>&rdquo;. Something like:</p>
 <div class="codehilite"><pre>
-<span class="i">multiplication</span> → <span class="i">higherThanMultiply</span> <span class="s">&quot;*&quot;</span> <span class="i">higherThanMultiply</span> ;
+<span class="i">expression</span>     → <span class="i">equality</span>
 </pre></div>
-<p>Since <code>*</code> and <code>/</code> have the same precedence and the level above them is unary
-operators, a better approximation is:</p>
+<p>Over at the other end of the precedence table, a primary expression contains
+all the literals and grouping expressions:</p>
 <div class="codehilite"><pre>
-<span class="i">multiplication</span> → <span class="i">unary</span> ( <span class="s">&quot;*&quot;</span> | <span class="s">&quot;/&quot;</span> ) <span class="i">unary</span> ;
+<span class="i">primary</span>        → <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;true&quot;</span> | <span class="s">&quot;nil&quot;</span>
+               | <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span> ;
 </pre></div>
-<p>Except that&rsquo;s not <em>quite</em> right. We broke associativity. This <code>multiplication</code>
-rule doesn&rsquo;t allow <code>1 * 2 * 3</code>. To support associativity, we make one side
-permit expressions at the <em>same</em> level. Which side we choose determines if the
-operator is left- or right-associative. Since multiplication and <span
-name="div">division</span> are left-associative, it&rsquo;s:</p>
-<aside name="div">
+<p>A unary expression starts with a unary operator followed by the operand. Since
+unary operators can nest<span class="em">&mdash;</span><code>!!true</code> is a valid if weird expression<span class="em">&mdash;</span>the
+operand can itself be a unary operator. A recursive rule handles that nicely:</p>
+<div class="codehilite"><pre>
+<span class="i">unary</span>          → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> ) <span class="i">unary</span> ;
+</pre></div>
+<p>But this rule has a problem. It never terminates. Remember, each rule needs to
+match expressions at that precedence level <em>or higher</em>, so we also need to let
+this match a primary expression:</p>
+<div class="codehilite"><pre>
+<span class="i">unary</span>          → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> ) <span class="i">unary</span>
+               | <span class="i">primary</span> ;
+</pre></div>
+<p>That works.</p>
+<p>The remaining rules are all binary operators. We&rsquo;ll start with the rule for
+multiplication and division. Here&rsquo;s a first try:</p>
+<div class="codehilite"><pre>
+<span class="i">multiplication</span> → <span class="i">multiplication</span> ( <span class="s">&quot;/&quot;</span> | <span class="s">&quot;*&quot;</span> ) <span class="i">unary</span>
+               | <span class="i">unary</span> ;
+</pre></div>
+<p>The rule recurses to match the left operand. That enables the rule to match a
+series of multiplication and division expressions like <code>1 * 2 / 3</code>. Putting the
+recursive production on the left side and <code>unary</code> on the makes the rule <span
+name="mult">left-associative</span> and unambiguous.</p>
+<aside name="mult">
 <p>In principle, it doesn&rsquo;t matter whether you treat multiplication as left- or
 right-associative<span class="em">&mdash;</span>you get the same result either way. Alas, in the real world
 with limited precision, roundoff and overflow mean that associativity can affect
@@ -332,20 +370,23 @@ numbers, the first evaluates to <code>0.006</code>, while the second yields
 <code>0.006000000000000001</code>. Sometimes that tiny difference matters.
 <a href="https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html">This</a> is a good place to learn more.</p>
 </aside>
-<div class="codehilite"><pre>
-<span class="i">multiplication</span> → <span class="i">multiplication</span> ( <span class="s">&quot;*&quot;</span> | <span class="s">&quot;/&quot;</span> ) <span class="i">unary</span> ;
-</pre></div>
-<p>This is correct, but the fact that the first nonterminal in the body of the rule
-is the same as the head of the rule means this production is <strong>left-recursive</strong>.
-Some parsing techniques, including the one we&rsquo;re going to use, have trouble with
-left recursion. Instead, we&rsquo;ll use this other style:</p>
+<p>All of this is correct, but the fact that the first nonterminal in the body of
+the rule is the same as the head of the rule means this production is
+<strong>left-recursive</strong>. Some parsing techniques, including the one we&rsquo;re going to
+use, have trouble with left recursion. (Recursion elsewhere, like we have in
+<code>unary</code> and the indirect recursion for grouping in <code>primary</code> are not a problem.)</p>
+<p>There are many grammars you can define that match the same language. The choice
+for how to model a particular language is partially a matter of taste and
+partially a pragmatic one. This rule is correct, but not optimal for how we
+intend to parse it. Instead of a left recursive rule, we&rsquo;ll use a different one:</p>
 <div class="codehilite"><pre>
 <span class="i">multiplication</span> → <span class="i">unary</span> ( ( <span class="s">&quot;/&quot;</span> | <span class="s">&quot;*&quot;</span> ) <span class="i">unary</span> )* ;
 </pre></div>
-<p>At the grammar level, this sidesteps left recursion by saying a multiplication
-expression is a flat <em>sequence</em> of multiplications and divisions. This mirrors
-the code we&rsquo;ll use to parse a sequence of multiplications.</p>
-<p>If we rejigger all of the binary operator rules in the same way, we get:</p>
+<p>We define a multiplication expression as a flat <em>sequence</em> of multiplications
+and divisions. This matches the same syntax as the previous rule, but better
+mirrors the code we&rsquo;ll write to parse code. We use the same structure for all of
+other binary operator precedence levels giving us this complete expression
+grammar:</p>
 <div class="codehilite"><pre>
 <span class="i">expression</span>     → <span class="i">equality</span> ;
 <span class="i">equality</span>       → <span class="i">comparison</span> ( ( <span class="s">&quot;!=&quot;</span> | <span class="s">&quot;==&quot;</span> ) <span class="i">comparison</span> )* ;
@@ -357,23 +398,9 @@ the code we&rsquo;ll use to parse a sequence of multiplications.</p>
 <span class="i">primary</span>        → <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;true&quot;</span> | <span class="s">&quot;nil&quot;</span>
                | <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span> ;
 </pre></div>
-<p>Instead of a single <code>binary</code> rule, there are now four separate rules for each binary operator precedence level. The main <code>expression</code> rule is no longer a flat series of <code>|</code> branches for each kind of expression. Instead, it is simply an alias for the lowest-precedence expression form, <span name="equality"><code>equality</code></span>, because that includes all higher-precedence expressions too.</p>
-<aside name="equality">
-<p>In later chapters, when we expand the grammar to include assignment and logical
-operators, this will change, but equality is the lowest for now.</p>
-</aside>
-<p>Each binary operator&rsquo;s operands use the next-higher precedence level. After the
-binary operators, we go to <code>unary</code>, the rule for unary operator expressions,
-since those bind tighter than binary ones. For <code>unary</code>, we <em>do</em> use a recursive
-rule because unary operators are right-associative, which means instead of left
-recursion, we have <strong>right recursion</strong>. The <code>unary</code> nonterminal is at the end of
-the body for <code>unary</code>, not the beginning, and our parser won&rsquo;t have any trouble
-with that.</p>
-<p>Finally, the <code>unary</code> rule alternately bubbles up to <code>primary</code> in cases where it
-doesn&rsquo;t match a unary operator. &ldquo;Primary&rdquo; is the time-honored name for the
-highest level of precedence including the atomic expressions like literals.</p>
-<p>Our grammar grew a bit, but it&rsquo;s unambiguous now. We&rsquo;re ready to make a parser
-for it.</p>
+<p>This grammar is more complex than the one we had before, but in return we have
+eliminated the previous one&rsquo;s ambiguity. It&rsquo;s just what we need to make a
+parser.</p>
 <h2><a href="#recursive-descent-parsing" name="recursive-descent-parsing"><small>6&#8202;.&#8202;2</small>Recursive Descent Parsing</a></h2>
 <p>There is a whole pack of parsing techniques whose names mostly seem to be
 combinations of &ldquo;L&rdquo; and &ldquo;R&rdquo;<span class="em">&mdash;</span><a href="https://en.wikipedia.org/wiki/LL_parser">LL(k)</a>, <a href="https://en.wikipedia.org/wiki/LR_parser">LR(1)</a>, <a href="https://en.wikipedia.org/wiki/LALR_parser">LALR</a><span class="em">&mdash;</span>along with
@@ -415,9 +442,9 @@ rule translates to code roughly like:</p><table>
 <tbody>
   <tr><td>Terminal</td><td>Code to match and consume a token</td></tr>
   <tr><td>Nonterminal</td><td>Call to that rule&rsquo;s function</td></tr>
-  <tr><td><code>|</code></td><td>If or switch statement</td></tr>
-  <tr><td><code>*</code> or <code>+</code></td><td>While or for loop</td></tr>
-  <tr><td><code>?</code></td><td>If statement</td></tr>
+  <tr><td><code>|</code></td><td><code>if</code> or <code>switch</code> statement</td></tr>
+  <tr><td><code>*</code> or <code>+</code></td><td><code>while</code> or <code>for</code> loop</td></tr>
+  <tr><td><code>?</code></td><td><code>if</code> statement</td></tr>
 </tbody>
 </table>
 <p>It&rsquo;s called &ldquo;<em>recursive</em> descent&rdquo; because when a grammar rule refers to itself<span class="em">&mdash;</span>directly or indirectly<span class="em">&mdash;</span>that translates to recursive method calls.</p>
@@ -426,11 +453,11 @@ rule translates to code roughly like:</p><table>
 <div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
 create new file</div>
 <pre>
-<span class="k">package</span> <span class="n">com.craftinginterpreters.lox</span>;
+<span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
 
-<span class="k">import</span> <span class="n">java.util.List</span>;
+<span class="k">import</span> <span class="i">java.util.List</span>;
 
-<span class="k">import static</span> <span class="n">com.craftinginterpreters.lox.TokenType.*</span>;
+<span class="k">import static</span> <span class="i">com.craftinginterpreters.lox.TokenType.*</span>;
 
 <span class="k">class</span> <span class="t">Parser</span> {
   <span class="k">private</span> <span class="k">final</span> <span class="t">List</span>&lt;<span class="t">Token</span>&gt; <span class="i">tokens</span>;
@@ -478,7 +505,7 @@ add after <em>expression</em>()</div>
   <span class="k">private</span> <span class="t">Expr</span> <span class="i">equality</span>() {
     <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">comparison</span>();
 
-    <span class="k">while</span> (<span class="i">match</span>(<span class="n">BANG_EQUAL</span>, <span class="n">EQUAL_EQUAL</span>)) {
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">BANG_EQUAL</span>, <span class="i">EQUAL_EQUAL</span>)) {
       <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
       <span class="t">Expr</span> <span class="i">right</span> = <span class="i">comparison</span>();
       <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
@@ -492,8 +519,8 @@ add after <em>expression</em>()</div>
 <p>Let&rsquo;s step through it. The left <code>comparison</code> nonterminal in the body is
 translated to the first call to <code>comparison()</code> and we store that in a local
 variable.</p>
-<p>Then, the <code>( ... )*</code> loop in the rule is mapped to a while loop. We need to know
-when to exit that loop. We can see that inside the rule, we must first find
+<p>Then, the <code>( ... )*</code> loop in the rule is mapped to a <code>while</code> loop. We need to
+know when to exit that loop. We can see that inside the rule, we must first find
 either a <code>!=</code> or <code>==</code> token. So, if we <em>don&rsquo;t</em> see one of those, we must be done
 with the sequence of equality operators. We express that check using a handy
 <code>match()</code> method:</p>
@@ -546,7 +573,7 @@ add after <em>check</em>()</div>
 add after <em>advance</em>()</div>
 <pre>
   <span class="k">private</span> <span class="t">boolean</span> <span class="i">isAtEnd</span>() {
-    <span class="k">return</span> <span class="i">peek</span>().<span class="i">type</span> == <span class="n">EOF</span>;
+    <span class="k">return</span> <span class="i">peek</span>().<span class="i">type</span> == <span class="i">EOF</span>;
   }
 
   <span class="k">private</span> <span class="t">Token</span> <span class="i">peek</span>() {
@@ -564,7 +591,7 @@ current token we have yet to consume and <code>previous()</code> returns the mos
 consumed token. The latter makes it easier to use <code>match()</code> and then access the
 just-matched token.</p>
 <p>That&rsquo;s most of the parsing infrastructure we need. Where were we? Right, so if
-we are inside the while loop in <code>equality()</code>, then the parser knows it found a
+we are inside the <code>while</code> loop in <code>equality()</code>, then the parser knows it found a
 <code>!=</code> or <code>==</code> operator and must be parsing an equality expression.</p>
 <p>It grabs the token that was matched for the operator so we can track which kind
 of binary expression this is. Then it calls <code>comparison()</code> again to parse the
@@ -594,7 +621,7 @@ add after <em>equality</em>()</div>
   <span class="k">private</span> <span class="t">Expr</span> <span class="i">comparison</span>() {
     <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">addition</span>();
 
-    <span class="k">while</span> (<span class="i">match</span>(<span class="n">GREATER</span>, <span class="n">GREATER_EQUAL</span>, <span class="n">LESS</span>, <span class="n">LESS_EQUAL</span>)) {
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">GREATER</span>, <span class="i">GREATER_EQUAL</span>, <span class="i">LESS</span>, <span class="i">LESS_EQUAL</span>)) {
       <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
       <span class="t">Expr</span> <span class="i">right</span> = <span class="i">addition</span>();
       <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
@@ -621,7 +648,7 @@ add after <em>comparison</em>()</div>
   <span class="k">private</span> <span class="t">Expr</span> <span class="i">addition</span>() {
     <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">multiplication</span>();
 
-    <span class="k">while</span> (<span class="i">match</span>(<span class="n">MINUS</span>, <span class="n">PLUS</span>)) {
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">MINUS</span>, <span class="i">PLUS</span>)) {
       <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
       <span class="t">Expr</span> <span class="i">right</span> = <span class="i">multiplication</span>();
       <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
@@ -633,7 +660,7 @@ add after <em>comparison</em>()</div>
   <span class="k">private</span> <span class="t">Expr</span> <span class="i">multiplication</span>() {
     <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">unary</span>();
 
-    <span class="k">while</span> (<span class="i">match</span>(<span class="n">SLASH</span>, <span class="n">STAR</span>)) {
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">SLASH</span>, <span class="i">STAR</span>)) {
       <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
       <span class="t">Expr</span> <span class="i">right</span> = <span class="i">unary</span>();
       <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
@@ -656,7 +683,7 @@ the unary operators:</p>
 add after <em>multiplication</em>()</div>
 <pre>
   <span class="k">private</span> <span class="t">Expr</span> <span class="i">unary</span>() {
-    <span class="k">if</span> (<span class="i">match</span>(<span class="n">BANG</span>, <span class="n">MINUS</span>)) {
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">BANG</span>, <span class="i">MINUS</span>)) {
       <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
       <span class="t">Expr</span> <span class="i">right</span> = <span class="i">unary</span>();
       <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Unary</span>(<span class="i">operator</span>, <span class="i">right</span>);
@@ -688,17 +715,17 @@ add after <em>unary</em>()</div>
 <pre>
 
   <span class="k">private</span> <span class="t">Expr</span> <span class="i">primary</span>() {
-    <span class="k">if</span> (<span class="i">match</span>(<span class="n">FALSE</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">false</span>);
-    <span class="k">if</span> (<span class="i">match</span>(<span class="n">TRUE</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">true</span>);
-    <span class="k">if</span> (<span class="i">match</span>(<span class="n">NIL</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">null</span>);
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">FALSE</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">false</span>);
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">TRUE</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">true</span>);
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">NIL</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">null</span>);
 
-    <span class="k">if</span> (<span class="i">match</span>(<span class="n">NUMBER</span>, <span class="n">STRING</span>)) {
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">NUMBER</span>, <span class="i">STRING</span>)) {
       <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="i">previous</span>().<span class="i">literal</span>);
     }
 
-    <span class="k">if</span> (<span class="i">match</span>(<span class="n">LEFT_PAREN</span>)) {
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">LEFT_PAREN</span>)) {
       <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">expression</span>();
-      <span class="i">consume</span>(<span class="n">RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after expression.&quot;</span>);
+      <span class="i">consume</span>(<span class="i">RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after expression.&quot;</span>);
       <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Grouping</span>(<span class="i">expr</span>);
     }
   }
@@ -847,7 +874,7 @@ add after <em>previous</em>()</div>
 add after <em>report</em>()</div>
 <pre>
   <span class="k">static</span> <span class="t">void</span> <span class="i">error</span>(<span class="t">Token</span> <span class="i">token</span>, <span class="t">String</span> <span class="i">message</span>) {
-    <span class="k">if</span> (<span class="i">token</span>.<span class="i">type</span> == <span class="t">TokenType</span>.<span class="n">EOF</span>) {
+    <span class="k">if</span> (<span class="i">token</span>.<span class="i">type</span> == <span class="t">TokenType</span>.<span class="i">EOF</span>) {
       <span class="i">report</span>(<span class="i">token</span>.<span class="i">line</span>, <span class="s">&quot; at end&quot;</span>, <span class="i">message</span>);
     } <span class="k">else</span> {
       <span class="i">report</span>(<span class="i">token</span>.<span class="i">line</span>, <span class="s">&quot; at &#39;&quot;</span> + <span class="i">token</span>.<span class="i">lexeme</span> + <span class="s">&quot;&#39;&quot;</span>, <span class="i">message</span>);
@@ -936,17 +963,17 @@ add after <em>error</em>()</div>
     <span class="i">advance</span>();
 
     <span class="k">while</span> (!<span class="i">isAtEnd</span>()) {
-      <span class="k">if</span> (<span class="i">previous</span>().<span class="i">type</span> == <span class="n">SEMICOLON</span>) <span class="k">return</span>;
+      <span class="k">if</span> (<span class="i">previous</span>().<span class="i">type</span> == <span class="i">SEMICOLON</span>) <span class="k">return</span>;
 
       <span class="k">switch</span> (<span class="i">peek</span>().<span class="i">type</span>) {
-        <span class="k">case</span> <span class="n">CLASS</span>:
-        <span class="k">case</span> <span class="n">FUN</span>:
-        <span class="k">case</span> <span class="n">VAR</span>:
-        <span class="k">case</span> <span class="n">FOR</span>:
-        <span class="k">case</span> <span class="n">IF</span>:
-        <span class="k">case</span> <span class="n">WHILE</span>:
-        <span class="k">case</span> <span class="n">PRINT</span>:
-        <span class="k">case</span> <span class="n">RETURN</span>:
+        <span class="k">case</span> <span class="i">CLASS</span>:
+        <span class="k">case</span> <span class="i">FUN</span>:
+        <span class="k">case</span> <span class="i">VAR</span>:
+        <span class="k">case</span> <span class="i">FOR</span>:
+        <span class="k">case</span> <span class="i">IF</span>:
+        <span class="k">case</span> <span class="i">WHILE</span>:
+        <span class="k">case</span> <span class="i">PRINT</span>:
+        <span class="k">case</span> <span class="i">RETURN</span>:
           <span class="k">return</span>;
       }
 

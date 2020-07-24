@@ -1,3 +1,41 @@
+2020/07/20 - fix #683
+2020/07/19 - weekend
+2020/07/18 - weekend
+2020/07/17 - fix #693
+2020/07/16 - 3 issues
+2020/07/15 - get rest of chapter snippets compiling
+2020/07/14 - 1 issue
+2020/07/13 - 6 issues
+2020/07/12 - finish type punning, one other issue
+2020/07/11 - weekend
+2020/07/10 - work on type punning
+2020/07/09 - email
+2020/07/08 - 5 issues
+2020/07/07 - 1 issue
+2020/07/06 - 2 issues
+2020/07/05 - weekend
+2020/07/04 - weekend
+2020/07/03 - fix #635
+2020/07/02 - use code font for statement types
+2020/07/01 - email and issues
+2020/06/30 - email
+2020/06/29 - three issues and prs
+2020/06/28 - weekend
+2020/06/27 - weekend
+2020/06/26 - 404 page
+2020/06/25 - 2 issues
+2020/06/24 - bugs and email
+2020/06/23 - bugs
+2020/06/22 - fix a few issues, fix aside markers in context lines
+2020/06/21 - weekend
+2020/06/20 - weekend
+2020/06/19 - email and issues
+2020/06/18 - close a few issues
+2020/06/17 - email
+2020/06/16 - 3 issues
+2020/06/15 - 9 prs and issues
+2020/06/12 - email
+2020/06/11 - email
 2020/06/10 - fix trailing whitespace css issue
 2020/06/09 - work on trailing whitespace css issue
 2020/06/08 - work on trailing whitespace css issue

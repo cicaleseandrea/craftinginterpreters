@@ -1,3 +1,109 @@
+lox:
+dynamically typed
+lexical scope
+first-class functions
+closures
+object oriented
+GC
+
+types:
+Boolean
+numbers
+strings
+nil
+
+expressions (produce a value):
+add + me;
+subtract - me;
+multiply * me;
+divide / me;
+-negateMe;
+less < than;
+lessThan <= orEqual;
+greater > than;
+greaterThan >= orEqual;
+is == equal;
+not != equal;
+!negateMe;
+this and that;
+this or that;
+
+statements  (produce an effect):
+print expression;
+expressionStatement;
+{ statements; in; a; block; }
+
+variables:
+var variableNil;
+var variableValue = "value";
+
+control flow:
+if (condition) {
+  yesStatement;
+} else {
+  noStatement;
+}
+for (beforeStatement; condition; afterStatement) {
+  statement;
+}
+beforeStatement;
+while (condition) {
+  statement;
+  afterStatement;
+}
+
+functions:
+call();
+fun call() {
+  print "ring ring";
+  //return nil;
+}
+compare(apples, oranges);
+fun compare(apples, oranges) {
+  return apples < oranges;
+}
+fun outerFunction() {
+  fun localFunction() {
+    print "I'm local!";
+  }
+
+  localFunction();
+}
+
+classes:
+class Phone {
+  init(name) {
+    this.name = name;
+  }
+  call() {
+    print "This is " + this.name + " voicemail";
+  }
+}
+var phone = Phone("lox");
+print phone; // "Phone instance".
+phone.number = 123456;
+phone.call();
+class Smartphone < Phone {
+  init(colour, name) {
+    super.init(name);
+    this.colour = colour;
+  }
+  show() {
+    print "I am " + this.colour;
+  }
+}
+var smart = Smartphone("red", "xol");
+smart.call();
+smart.show();
+
+
+
+
+
+
+
+
+
 to implement:
 - modulo operator: find % remainder
 - conditional operator: condition ? then : else;

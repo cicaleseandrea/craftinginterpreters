@@ -104,7 +104,7 @@ smart.show();
 
 
 
-to implement:
+not implemented:
 - modulo operator: find % remainder
 - conditional operator: condition ? then : else;
 - do while: do { statement } while (condition);
